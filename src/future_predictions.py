@@ -31,7 +31,7 @@ class FuturePredictions:
         self.total_number_hours = self.number_days_predict_future * 24
         self.total_items = self.number_days_predict_future * 24
         self.initialDate = initialDate
-        
+
     def __rearrange_array_in_number_of_days(self, database, categories_total):
         forecasters = []
         values_to_predict = []
@@ -42,7 +42,7 @@ class FuturePredictions:
             values_to_predict.append(database[i])
         forecasters, values_to_predict = np.array(forecasters), np.array(values_to_predict)
         return forecasters, values_to_predict
-    
+
     def __future_prediction(self, future_forecasters):
         current_path = os.getcwd() + self.filePath
         custom_objects = {
@@ -51,27 +51,27 @@ class FuturePredictions:
         regressor = load_model(current_path, custom_objects=custom_objects)
         future_predictions = regressor.predict(future_forecasters)
         return future_predictions
-    
+
     def __format_expected_days_with_data(self, database):
         newDates = []
         last_date = self.initialDate
         converted_date = datetime.strptime(last_date, '%Y-%m-%d %H:%M:%S')
         for prevision in database:
             converted_date = converted_date + timedelta(hours=1)
-            converted_date_text = converted_date.strftime("%d-%m-%Y %H:%M:%S")
+            converted_date_text = converted_date.strftime("%Y-%m-%dT%H:%M:%S")
             newDates.append(converted_date_text)
         return newDates
-    
+
     def getFutureForecasts(self):
         categories_total = len(self.data)
         new_rows = np.zeros((self.total_number_hours, categories_total))
         new_database = np.vstack((self.data, new_rows))
         self.total_items = new_database.shape[0]
-        forecasters, values_to_predict = self.__rearrange_array_in_number_of_days(new_database, categories_total)    
-        
+        forecasters, values_to_predict = self.__rearrange_array_in_number_of_days(new_database, categories_total)
+
         future = self.__future_prediction(forecasters)
         normalizer = joblib.load('normalizer.save')
-        
+
         future_prediction_original_format = normalizer.inverse_transform(future)
         expected_days = future_prediction_original_format[self.number_days_predict_future:]
         prediction_dates = self.__format_expected_days_with_data(new_database)
