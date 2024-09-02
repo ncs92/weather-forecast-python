@@ -15,7 +15,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from scipy.interpolate import CubicSpline
 from tensorflow.keras.saving import register_keras_serializable
-
+import joblib
 import math
 import os
 import keras
@@ -23,23 +23,35 @@ import keras
 # Clear any existing custom objects
 keras.saving.get_custom_objects().clear()
 
+# def custom_accuracy_item(y_real, y_pred):
+#     # A fórmula é |1 - (y_pred / y_true)| < 0.1, retornando um tensor booleano
+#     # (y_pred * 1) / y_real = x
+#     condition = tf.math.abs(1 - (y_pred / y_real)) < 0.1
+#     # Convertendo o tensor booleano em float (True se torna 1.0, False se torna 0.0)
+#     as_float = tf.cast(condition, tf.float32)
+#     # Calculando a média para obter a acurácia
+#     return as_float
+
+# @register_keras_serializable(package="Custom", name="custom_accuracy")
+# def custom_accuracy(y_real, y_pred):
+#     accuracy = 0.0
+#     # print("TTTT", y_real.shape)
+#     for i in range(y_real.shape[1]):
+#         accuracy = custom_accuracy_item(y_real[i], y_pred[i])
+#     accuracy = accuracy / y_real.shape[1]
+#     return tf.reduce_mean(accuracy)
+
 def custom_accuracy_item(y_real, y_pred):
-    # A fórmula é |1 - (y_pred / y_true)| < 0.1, retornando um tensor booleano
-    # (y_pred * 1) / y_real = x
     condition = tf.math.abs(1 - (y_pred / y_real)) < 0.1
-    # Convertendo o tensor booleano em float (True se torna 1.0, False se torna 0.0)
-    as_float = tf.cast(condition, tf.float32)
-    # Calculando a média para obter a acurácia
-    return as_float
+    return tf.cast(condition, tf.float32)
 
 @register_keras_serializable(package="Custom", name="custom_accuracy")
 def custom_accuracy(y_real, y_pred):
-    accuracy = 0.0
-    # print("TTTT", y_real.shape)
+    accuracies = []
     for i in range(y_real.shape[1]):
-        accuracy = custom_accuracy_item(y_real[i], y_pred[i])
-    accuracy = accuracy / y_real.shape[1]
-    return tf.reduce_mean(accuracy)
+        accuracy = custom_accuracy_item(y_real[:, i], y_pred[:, i])
+        accuracies.append(tf.reduce_mean(accuracy))
+    return tf.reduce_mean(tf.stack(accuracies))
 
 @register_keras_serializable(package="Custom", name="TemperatureMeasurements")
 class TemperatureMeasurements:
@@ -55,6 +67,13 @@ class TemperatureMeasurements:
         csv.head()
         return csv
     
+        return {
+            "filePath": self.filePath,
+            "chosen_category": self.chosen_category,
+            "number_days_to_predict_next": self.number_days_to_predict_next,
+            "number_days_predict_future": self.number_days_predict_future
+        }
+        
     def get_config(self):
         return {
             "filePath": self.filePath,
@@ -90,6 +109,7 @@ class TemperatureMeasurements:
         normalizer = MinMaxScaler(feature_range=(0,1))
         normalize_base_train = normalizer.fit_transform(base_train)
         normalize_base_train = np.nan_to_num(normalize_base_train)
+        joblib.dump(normalizer, 'normalizer.save')
         return normalize_base_train, normalizer
 
     def __rearrange_array_in_number_of_days(self, number_days_to_predict_next, total_items, normalize_base_train, categories_total, database):
@@ -115,7 +135,7 @@ class TemperatureMeasurements:
         regressor.add(LSTM(units = 80))
         regressor.add(LeakyReLU(alpha=0.5))
         regressor.add(Dense(units = result_train.shape[1], activation = 'sigmoid'))
-        optimizer = Adam(learning_rate=0.001)
+        optimizer = Adam(learning_rate=0.01)
         regressor.compile(optimizer = optimizer, loss = 'mean_squared_error',
                         metrics = ['mean_absolute_error', custom_accuracy])
         es = EarlyStopping(monitor = 'loss', min_delta = 1e-10, patience = 10, verbose = 1)
@@ -139,7 +159,7 @@ class TemperatureMeasurements:
                 print(f"{data_tests[i]} - Esperado: {"{:.2f}".format(result_test_original[i][j])}, Previsão: {"{:.2f}".format(predictions_original[i][j])}")
             print("########################")
 
-    def __future_prediction(self, forecasters_test, data_tests, number_days_predict_future, normalizer, future_forecasters, future_values_to_predict, future_data_forecasters):
+    def __future_prediction(self, future_forecasters):
         current_path = os.getcwd() + '/pesos.keras'
         custom_objects = {
             'custom_accuracy': custom_accuracy
@@ -190,6 +210,7 @@ class TemperatureMeasurements:
         categories_total = normalize_base_train.shape[1]
         forecasters, values_to_predict, data_forecasters = self.__rearrange_array_in_number_of_days(self.number_days_to_predict_next, total_items, normalize_base_train, categories_total, database)
 
+        print("FOFOFOOFOF", forecasters[forecasters.shape[0]-1])
 
         forecasters_train, forecasters_test, result_train, result_test = train_test_split(forecasters, values_to_predict, test_size=0.3, shuffle=False)
         index_init_result_test = len(forecasters_train)
@@ -197,17 +218,21 @@ class TemperatureMeasurements:
         normalize_base_train.shape
         predictions, regressor = self.__prediction(forecasters_train, forecasters_test, result_train)
         self.__show_results_prediction(result_test, forecasters_train, predictions, normalizer, base_array, data_tests, index_column_chosen_category)
+
+        #   print("$$$", self.number_days_to_predict_next * 24) # 144
+        # total_items_with_predict_values = total_items + (self.number_days_to_predict_next * 24)
+        # print(total_items, total_items_with_predict_values) # 14400 14544
+        # new_rows = np.zeros((total_items_with_predict_values - database.shape[0], database.shape[1]))
+        # new_database = np.vstack((database, new_rows))
+        # new_rows_normalize_base_train = np.zeros((total_items_with_predict_values - normalize_base_train.shape[0], normalize_base_train.shape[1]))
+        # new_normalize_base_train = np.vstack((normalize_base_train, new_rows_normalize_base_train))
+        # future_forecasters, future_values_to_predict, future_data_forecasters = self.__rearrange_array_in_number_of_days(self.number_days_to_predict_next, total_items_with_predict_values, new_normalize_base_train, categories_total, new_database)
         
+        # print("ABACAXI", future_forecasters.shape)
         
-        total_items_with_predict_values = total_items + (self.number_days_to_predict_next * 24)
-        new_rows = np.zeros((total_items_with_predict_values - database.shape[0], database.shape[1]))
-        new_database = np.vstack((database, new_rows))
-        new_rows_normalize_base_train = np.zeros((total_items_with_predict_values - normalize_base_train.shape[0], normalize_base_train.shape[1]))
-        new_normalize_base_train = np.vstack((normalize_base_train, new_rows_normalize_base_train))
-        future_forecasters, future_values_to_predict, future_data_forecasters = self.__rearrange_array_in_number_of_days(self.number_days_to_predict_next, total_items_with_predict_values, new_normalize_base_train, categories_total, new_database)
+        # future = self.__future_prediction(future_forecasters)
+        # future_prediction_original_format = normalizer.inverse_transform(future)
+        # expected_days = future_prediction_original_format[self.number_days_predict_future:]
+        # prediction_dates = self.format_expected_days_with_data(expected_days, database)
+        # return expected_days, prediction_dates
         
-        future = self.__future_prediction(forecasters_test, data_tests, self.number_days_predict_future, normalizer, future_forecasters, future_values_to_predict, future_data_forecasters)
-        future_prediction_original_format = normalizer.inverse_transform(future)
-        expected_days = future_prediction_original_format[self.number_days_predict_future:]
-        prediction_dates = self.format_expected_days_with_data(expected_days, database)
-        return expected_days, prediction_dates
