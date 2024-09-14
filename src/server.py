@@ -4,66 +4,55 @@ from urllib.parse import parse_qsl, urlparse
 from temperature_measurements import TemperatureMeasurements
 from future_predictions import FuturePredictions
 from datetime import datetime
+import json
 
-# https://realpython.com/python-http-server/
-class RequestHandler(BaseHTTPRequestHandler):
-
-
-  def format_response(self, temperatures, prediction_dates):
-    response = []
-    i = 0
-    for temperature in temperatures:
-        response.append({
-            'date': prediction_dates[i], 
-            'precipitation': float(temperature[0]), 
-            'atmospheric_pressure_season_level_hourly': float(temperature[1]), 
-            'max_atmospheric_pressure_previous_hour': float(temperature[2]), 
-            'atmospheric_pressure_min_earliest_hour': float(temperature[3]), 
-            'global_radiation': float(temperature[4]), 
-            'air_temperature_dry_bulb_hours': float(temperature[5]), 
-            'dew_point_temperature': float(temperature[6]), 
-            'maximum_temperature_previous_hour': float(temperature[7]), 
-            'minimum_temperature_previous_hour': float(temperature[8]), 
-            'dew_temperature_max_earliest_hour': float(temperature[9]), 
-            'dew_temperature_min_earliest_hour': float(temperature[10]), 
-            'humidity_rel_max_earliest_hour': float(temperature[11]), 
-            'humidity_rel_min_earliest_hour': float(temperature[12]), 
-            'relative_air_humidity_hourly': float(temperature[13]), 
-            'wind_clockwise_direction': float(temperature[14]), 
-            'wind_maximum_gust': float(temperature[15]), 
-            'wind_hourly_speed': float(temperature[16])
-        })
-        i = i + 1
-    return response
-        
-
-  def do_GET(self):
-    url = urlparse(self.path)
-    query = dict(parse_qsl(url.query))
-    
-    if url.path == "/weather-forecast":
-        # temperatureMeasurements = TemperatureMeasurements('./src/query_result.csv', 'maximum_temperature_previous_hour', 6, 1)
-        filePath='/pesos.keras'
-        number_days_predict_future=6
-        data = [0.07778849, 0.76898223, 0.45447155, 0.42938031, 0.86328745, 0.92458115,
-        0.1472045, 0.93643693, 0.08898623, 0.96877748, 0.98860011, 0.3510132,
-        0.10678067, 0.04347153, 0.06222543, 0.95923277, 0.97397048]
-        initialDate = '2024-07-31 11:00:00'
-        forecasters = FuturePredictions(filePath, number_days_predict_future, data, initialDate)
-        temperatures, prediction_dates = forecasters.getFutureForecasts()
-        data_hora_atual = datetime.now()
-        data_formatada = data_hora_atual.strftime("%d-%m-%Y %H:%M:%S")
-        response = json.dumps({
-          "previsoes": self.format_response(temperatures, prediction_dates),
-          "data_solicitação": data_formatada
-        })
-    else:
-        response = json.dumps({ "path": url.path, "query": query })
-
-    self.send_response(200)
-    self.send_header("Content-Type", "application/json")
-    self.end_headers()
-    self.wfile.write(response.encode("utf-8"))
+class RequestHandler(BaseHTTPRequestHandler):  
+  def do_POST(self):
+        url = urlparse(self.path)
+        content_length = int(self.headers['Content-Length'])
+        post_data = self.rfile.read(content_length)
+        post_data = post_data.decode('utf-8')
+        try:
+          post_data_json = json.loads(post_data)
+          print("###########")
+          print(f"Dados recebidos: {post_data_json}")
+          print("###########")
+          if url.path == "/weather-forecast":
+            temperatureMeasurements = TemperatureMeasurements(post_data_json["filePath"], post_data_json["baseDir"], post_data_json["forecast"])
+            response = temperatureMeasurements.getFuturePredictions()
+              # Definir o código de status de resposta
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(json.dumps(response).encode('utf-8'))
+          if url.path == "/predict-weather-forecast":
+            last_forecast_file_path = post_data_json["last_forecast_file_path"]
+            last_predict_value_file_path = post_data_json["last_predict_value_file_path"]
+            model_path = post_data_json["model_path"]
+            last_date = post_data_json["last_date"]
+            number_predictions = post_data_json["number_predictions"]
+            normalizer_path = post_data_json["normalizer_path"]
+            number_days_predict_future = post_data_json["number_days_predict_future" ]
+            futurePredictions = FuturePredictions(last_forecast_file_path, last_predict_value_file_path, model_path, normalizer_path, last_date, number_predictions, number_days_predict_future)
+            predictions, days = futurePredictions.getFutureForecasts()
+            print("######Predictions######", len(predictions))
+            print(predictions)
+            print("######Predictions######", len(days))
+            json_array = []
+            for i in range(len(predictions) - 1):  # Mude o range para o número de itens que deseja
+              data = {
+                  "date": days[i],
+                  "value": predictions[i]
+              }
+              json_array.append(data)
+            json_output = json.dumps(json_array, indent=4)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json_output.encode("utf-8"))
+            
+        except json.JSONDecodeError:
+          print(f"Erro ao decodificar JSON: {post_data}")
 
 if __name__ == "__main__":
   host = "localhost"
