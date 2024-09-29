@@ -23,24 +23,6 @@ import keras
 # Clear any existing custom objects
 keras.saving.get_custom_objects().clear()
 
-# def custom_accuracy_item(y_real, y_pred):
-#     # A fórmula é |1 - (y_pred / y_true)| < 0.1, retornando um tensor booleano
-#     # (y_pred * 1) / y_real = x
-#     condition = tf.math.abs(1 - (y_pred / y_real)) < 0.1
-#     # Convertendo o tensor booleano em float (True se torna 1.0, False se torna 0.0)
-#     as_float = tf.cast(condition, tf.float32)
-#     # Calculando a média para obter a acurácia
-#     return as_float
-
-# @register_keras_serializable(package="Custom", name="custom_accuracy")
-# def custom_accuracy(y_real, y_pred):
-#     accuracy = 0.0
-#     # print("TTTT", y_real.shape)
-#     for i in range(y_real.shape[1]):
-#         accuracy = custom_accuracy_item(y_real[i], y_pred[i])
-#     accuracy = accuracy / y_real.shape[1]
-#     return tf.reduce_mean(accuracy)
-
 def custom_accuracy_item(y_real, y_pred):
     condition = tf.math.abs(1 - (y_pred / y_real)) < 0.1
     return tf.cast(condition, tf.float32)
@@ -55,8 +37,6 @@ def custom_accuracy(y_real, y_pred):
 
 @register_keras_serializable(package="Custom", name="TemperatureMeasurements")
 class TemperatureMeasurements:
-    #pd.read_csv('./query_result.csv', sep=',')
-    # def __init__(self, filePath, chosen_category, number_days_to_predict_next, number_days_predict_future):
     def __init__(self, filePath, baseDir, request):
         print(request)
         self.filePath = filePath
@@ -95,19 +75,19 @@ class TemperatureMeasurements:
     def from_config(cls, config):
         return cls(**config)
 
-    #Função para interpolar uma série temporal com spline cúbico
     def interpolate_spline(self, series):
-        # Remove os valores NaN
+        print("SERRR", series)
         series_nonan = series.dropna()
-        if len(series_nonan) < 2:  # Precisamos de pelo menos dois pontos para interpolar
+        print("series_nonan", series_nonan)
+        if len(series_nonan) < 2:
             return series
-
-        # Interpolação spline cúbica
         spline = CubicSpline(series_nonan.index, series_nonan.values)
-        return pd.Series(spline(series.index), index=series.index)
+        print("spline", spline)
+        result = pd.Series(spline(series.index), index=series.index)
+        print("result", result)
+        return result
 
     def __normalize_invalid_rows(self, database, index_column_chosen_category):
-        print("index_column_chosen_category", index_column_chosen_category)
         df = pd.DataFrame(database, columns=[f'value{i}' for i in range(0, database.shape[1])])
         for col in df.columns[0:]:
             df[col] = self.interpolate_spline(df[col])
@@ -115,7 +95,6 @@ class TemperatureMeasurements:
         return base
 
     def __normalize_base(self, base_train):
-        print("__normalize_base: ", base_train.shape, base_train[:3]) #normalize_base:  (188700, 1)
         normalizer = MinMaxScaler(feature_range=(0,1))
         normalize_base_train = normalizer.fit_transform(base_train)
         normalize_base_train = np.nan_to_num(normalize_base_train)
@@ -136,9 +115,6 @@ class TemperatureMeasurements:
             forecasters.append(normalize_base_train[i-number_days_to_predict_next:i, 0:categories_total])
             values_to_predict.append(normalize_base_train[i])
         forecasters, values_to_predict = np.array(forecasters), np.array(values_to_predict)
-        print("#$%%")
-        print(forecasters[:5])
-        print(values_to_predict[:5])
         return forecasters, values_to_predict, data_forecasters
 
     def __prediction(self, forecasters_train, forecasters_test, result_train, filepath, model_file_path):
@@ -149,7 +125,6 @@ class TemperatureMeasurements:
             reg = L1L2(self.layer_weight_l1, self.layer_weight_l2)
         regressor = Sequential()
         regressor.save_weights(filepath)
-        print("22222$$$$$$", forecasters_train.shape) # (132085, 6, 1)
         regressor.add(LSTM(units = 100, return_sequences = True, input_shape = (forecasters_train.shape[1], forecasters_train.shape[2]), kernel_regularizer=reg))
         regressor.add(LeakyReLU(alpha=0.5))
         
@@ -210,7 +185,6 @@ class TemperatureMeasurements:
         newDates = []
         last_date = np.array(database[database.shape[0]-1])[0]
         converted_date = datetime.strptime(last_date, '%Y-%m-%d %H:%M:%S')
-        print(last_date)
         for prevision in expected_days:
             converted_date = converted_date + timedelta(hours=1)
             converted_date_text = converted_date.strftime("%d-%m-%Y %H:%M:%S")
@@ -218,37 +192,18 @@ class TemperatureMeasurements:
         return newDates
     
     def getOnlyCorrelationColumns(self, csv, chosen_category):
-        # Remove the 'date' column for correlation calculation
         data_without_date = csv.drop(columns=['date'])
-        
-        # Calculate the correlation matrix
         correlation_matrix = data_without_date.corr()
-        print("COR MATRIX")
-        print(correlation_matrix)
-        
-        # Get the correlations of all columns with the chosen category
         chosen_category_corr = correlation_matrix[chosen_category]
-        print("$$$$")
-        print(chosen_category_corr)
-        
-        # Select only columns with correlation above 0.4 (excluding the chosen category itself)
         correlated_columns = chosen_category_corr[chosen_category_corr > 0.4].index.tolist()
-        print("aaa")
-        print(correlated_columns)
-        
-        # Ensure the chosen category is in the correlated columns list
         if chosen_category not in correlated_columns:
             correlated_columns.append(chosen_category)
-        
-        # Filter the original CSV with only the correlated columns, keeping 'date' first
         filtered_csv = csv[['date'] + correlated_columns]
-        
-        # Move the chosen category to the last position
         columns = [col for col in filtered_csv.columns if col != chosen_category] + [chosen_category]
+        print("COLUMNSSS", columns)
         filtered_csv = filtered_csv[columns]
         
         return filtered_csv
-
 
             
     def getFuturePredictions(self):
@@ -257,10 +212,7 @@ class TemperatureMeasurements:
         csv.replace(-9999, np.nan, inplace=True)
         csv.replace([-9999.00, -9999], np.nan, inplace=True)
 
-        print("OLA")
         filtered_csv = self.getOnlyCorrelationColumns(csv, self.chosen_category)
-        print("PASOOO")
-        print(filtered_csv)
         
         database = filtered_csv.to_numpy()
         categories = filtered_csv.columns.tolist()
@@ -269,7 +221,6 @@ class TemperatureMeasurements:
         
         base_array = self.__normalize_invalid_rows(base_without_date, index_column_chosen_category)
         base_train = base_array
-        print("BAAASE", base_train.shape, base_train[:3])
         normalize_base_train, normalizer = self.__normalize_base(base_train)
         forecasters = []
         data_forecasters = []
@@ -309,22 +260,6 @@ class TemperatureMeasurements:
             'mean_absolute_error': str(mean_absolute_error),
             'learning_rate': str(learning_rate)
         }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
         #   print("$$$", self.number_days_to_predict_next * 24) # 144
