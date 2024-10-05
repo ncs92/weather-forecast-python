@@ -7,7 +7,7 @@ from seasonality_analysis import SeasonalityAnalysis
 from datetime import datetime
 import json
 
-class RequestHandler(BaseHTTPRequestHandler):  
+class RequestHandler(BaseHTTPRequestHandler):
   def do_POST(self):
         url = urlparse(self.path)
         content_length = int(self.headers['Content-Length'])
@@ -70,12 +70,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json_output.encode("utf-8"))
-            
+
         except json.JSONDecodeError:
           print(f"Erro ao decodificar JSON: {post_data}")
 
 if __name__ == "__main__":
-  host = "localhost"
+  host = "0.0.0.0"
   port = 3011
   print(f"Server started at http://{host}:{port}")
   server = HTTPServer((host, port), RequestHandler)
