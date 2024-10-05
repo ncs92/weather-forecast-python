@@ -49,6 +49,7 @@ class TemperatureMeasurements:
         self.layer_weight_l1 = request["kernel_regularizers"]["layer_weight_l1"]
         self.layer_weight_l2 = request["kernel_regularizers"]["layer_weight_l2"]
         self.inner_layers = request["inner_layers"]
+        self.learning_rate = request["learning_rate"]
         # self.number_days_predict_future = number_days_predict_future
 
     def __read_file(self, file):
@@ -136,7 +137,7 @@ class TemperatureMeasurements:
         regressor.add(LSTM(units = 80))
         regressor.add(LeakyReLU(alpha=0.5))
         regressor.add(Dense(units = result_train.shape[1], activation = 'sigmoid'))
-        optimizer = Adam(learning_rate=0.01)
+        optimizer = Adam(learning_rate=self.learning_rate) #
         regressor.compile(optimizer = optimizer, loss = 'mean_squared_error',
                         metrics = ['mean_absolute_error', custom_accuracy])
         es = EarlyStopping(monitor = 'loss', min_delta = 1e-10, patience = 10, verbose = 1)
@@ -200,7 +201,6 @@ class TemperatureMeasurements:
             correlated_columns.append(chosen_category)
         filtered_csv = csv[['date'] + correlated_columns]
         columns = [col for col in filtered_csv.columns if col != chosen_category] + [chosen_category]
-        print("COLUMNSSS", columns)
         filtered_csv = filtered_csv[columns]
         
         return filtered_csv
@@ -260,22 +260,3 @@ class TemperatureMeasurements:
             'mean_absolute_error': str(mean_absolute_error),
             'learning_rate': str(learning_rate)
         }
-
-
-        #   print("$$$", self.number_days_to_predict_next * 24) # 144
-        # total_items_with_predict_values = total_items + (self.number_days_to_predict_next * 24)
-        # print(total_items, total_items_with_predict_values) # 14400 14544
-        # new_rows = np.zeros((total_items_with_predict_values - database.shape[0], database.shape[1]))
-        # new_database = np.vstack((database, new_rows))
-        # new_rows_normalize_base_train = np.zeros((total_items_with_predict_values - normalize_base_train.shape[0], normalize_base_train.shape[1]))
-        # new_normalize_base_train = np.vstack((normalize_base_train, new_rows_normalize_base_train))
-        # future_forecasters, future_values_to_predict, future_data_forecasters = self.__rearrange_array_in_number_of_days(self.number_days_to_predict_next, total_items_with_predict_values, new_normalize_base_train, categories_total, new_database)
-        
-        # print("ABACAXI", future_forecasters.shape)
-        
-        # future = self.__future_prediction(future_forecasters)
-        # future_prediction_original_format = normalizer.inverse_transform(future)
-        # expected_days = future_prediction_original_format[self.number_days_predict_future:]
-        # prediction_dates = self.format_expected_days_with_data(expected_days, database)
-        # return expected_days, prediction_dates
-        
