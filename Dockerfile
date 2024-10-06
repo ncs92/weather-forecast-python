@@ -4,8 +4,7 @@ EXPOSE 3011
 
 CMD [ "pipenv", "run", "python", "src/server.py" ]
 
-RUN groupadd --system weather \
-  && useradd --system --create-home --gid weather weather \
+RUN useradd -MU -u 1010 weather \
   && pip install --upgrade pip pipenv
 
 
@@ -19,6 +18,6 @@ RUN pipenv --python $(which python) install --deploy
 
 COPY . .
 
-RUN chown -R weather:weather ./
+RUN chown -R weather:weather .
 
 USER weather:weather

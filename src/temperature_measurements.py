@@ -49,21 +49,21 @@ class TemperatureMeasurements:
         self.layer_weight_l1 = request["kernel_regularizers"]["layer_weight_l1"]
         self.layer_weight_l2 = request["kernel_regularizers"]["layer_weight_l2"]
         self.inner_layers = request["inner_layers"]
-        self.learning_rate = request["learning_rate"]
+        self.learning_rate = float(request["learning_rate"])
         # self.number_days_predict_future = number_days_predict_future
 
     def __read_file(self, file):
         csv = pd.read_csv(file, sep=',')
         csv.head()
         return csv
-    
+
         return {
             "filePath": self.filePath,
             "chosen_category": self.chosen_category,
             "number_days_to_predict_next": self.number_days_to_predict_next,
             # "number_days_predict_future": self.number_days_predict_future
         }
-        
+
     def get_config(self):
         return {
             "filePath": self.filePath,
@@ -99,11 +99,11 @@ class TemperatureMeasurements:
         normalizer = MinMaxScaler(feature_range=(0,1))
         normalize_base_train = normalizer.fit_transform(base_train)
         normalize_base_train = np.nan_to_num(normalize_base_train)
-        
+
         normalizer_path = os.path.join(self.baseDir, 'normalizer.save')
         if os.path.exists(normalizer_path):
             os.remove(normalizer_path)
-        
+
         joblib.dump(normalizer, normalizer_path)
         return normalize_base_train, normalizer
 
@@ -128,12 +128,12 @@ class TemperatureMeasurements:
         regressor.save_weights(filepath)
         regressor.add(LSTM(units = 100, return_sequences = True, input_shape = (forecasters_train.shape[1], forecasters_train.shape[2]), kernel_regularizer=reg))
         regressor.add(LeakyReLU(alpha=0.5))
-        
+
         for innerLayer in self.inner_layers:
             regressor.add(LSTM(units = innerLayer["number_units"], return_sequences = True))
             if (innerLayer["use_leaky_relu"]):
                 regressor.add(LeakyReLU(alpha=innerLayer["relu_alpha"]))
-        
+
         regressor.add(LSTM(units = 80))
         regressor.add(LeakyReLU(alpha=0.5))
         regressor.add(Dense(units = result_train.shape[1], activation = 'sigmoid'))
@@ -161,7 +161,7 @@ class TemperatureMeasurements:
         return predictions, regressor, custom_acc, loss, mean_absolute_error, learning_rate
 
     def __show_results_prediction(self, result_test, forecasters_train, predictions, normalizer, base_array, data_tests, index_column_chosen_category):
-        base_prediction = np.zeros((result_test.shape[0], result_test.shape[1]))        
+        base_prediction = np.zeros((result_test.shape[0], result_test.shape[1]))
         prediction_original_format = normalizer.inverse_transform(base_prediction)
         result_test_original = normalizer.inverse_transform(result_test)
         predictions_original = normalizer.inverse_transform(predictions)
@@ -181,7 +181,7 @@ class TemperatureMeasurements:
         regressor = load_model(current_path, custom_objects=custom_objects)
         future_predictions = regressor.predict(future_forecasters)
         return future_predictions
-    
+
     def format_expected_days_with_data(self, expected_days, database):
         newDates = []
         last_date = np.array(database[database.shape[0]-1])[0]
@@ -191,7 +191,7 @@ class TemperatureMeasurements:
             converted_date_text = converted_date.strftime("%d-%m-%Y %H:%M:%S")
             newDates.append(converted_date_text)
         return newDates
-    
+
     def getOnlyCorrelationColumns(self, csv, chosen_category):
         data_without_date = csv.drop(columns=['date'])
         correlation_matrix = data_without_date.corr()
@@ -202,10 +202,10 @@ class TemperatureMeasurements:
         filtered_csv = csv[['date'] + correlated_columns]
         columns = [col for col in filtered_csv.columns if col != chosen_category] + [chosen_category]
         filtered_csv = filtered_csv[columns]
-        
+
         return filtered_csv
 
-            
+
     def getFuturePredictions(self):
         csv = self.__read_file(self.filePath)
         csv.replace(-9999.0, np.nan, inplace=True)
@@ -213,12 +213,12 @@ class TemperatureMeasurements:
         csv.replace([-9999.00, -9999], np.nan, inplace=True)
 
         filtered_csv = self.getOnlyCorrelationColumns(csv, self.chosen_category)
-        
+
         database = filtered_csv.to_numpy()
         categories = filtered_csv.columns.tolist()
         index_column_chosen_category = categories.index(self.chosen_category)
         base_without_date = database[:, 1:database.shape[1]]
-        
+
         base_array = self.__normalize_invalid_rows(base_without_date, index_column_chosen_category)
         base_train = base_array
         normalize_base_train, normalizer = self.__normalize_base(base_train)
@@ -228,7 +228,7 @@ class TemperatureMeasurements:
         total_items = normalize_base_train.shape[0]
         categories_total = normalize_base_train.shape[1]
         forecasters, values_to_predict, data_forecasters = self.__rearrange_array_in_number_of_days(self.number_days_to_predict_next, total_items, normalize_base_train, categories_total, database)
-        
+
         last_forecast_file_path = os.path.join(self.baseDir, 'forecast.txt')
         last_predict_value_file_path = os.path.join(self.baseDir, 'predict_value.txt')
         if os.path.exists(last_forecast_file_path):
@@ -237,12 +237,12 @@ class TemperatureMeasurements:
             os.remove(last_predict_value_file_path)
         np.savetxt(last_forecast_file_path, forecasters[len(forecasters)-1])
         np.savetxt(last_predict_value_file_path, values_to_predict[len(forecasters)-1])
-        
+
         forecasters_train, forecasters_test, result_train, result_test = train_test_split(forecasters, values_to_predict, test_size=0.3, shuffle=False)
         index_init_result_test = len(forecasters_train)
         data_tests = data_forecasters[index_init_result_test:]
         normalize_base_train.shape
-        
+
         file_path = os.path.join(self.baseDir, 'pesos.weights.h5')
         model_file_path = os.path.join(self.baseDir, 'model.h5')
         if os.path.exists(file_path):
