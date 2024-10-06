@@ -15,9 +15,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Deploy Application
         uses: appleboy/ssh-action@master
+        env:
+          BRANCH: ${{ github.ref_name }}
+          DOCKER_IMAGE_TAG: ${{ github.sha }}
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           port: ${{ secrets.SSH_PORT }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: BRANCH,DOCKER_IMAGE_TAG
           script: 'cd weather-forecast-server && ./bin/deploy.sh compute'
