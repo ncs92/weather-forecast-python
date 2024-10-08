@@ -128,20 +128,22 @@ class TemperatureMeasurements:
         regressor.save_weights(filepath)
         regressor.add(LSTM(units = 100, return_sequences = True, input_shape = (forecasters_train.shape[1], forecasters_train.shape[2]), kernel_regularizer=reg))
         regressor.add(LeakyReLU(alpha=0.5))
-
+        cont = 0
         for innerLayer in self.inner_layers:
-            regressor.add(LSTM(units = innerLayer["number_units"], return_sequences = True))
+            if cont < (len(self.inner_layers)-1):
+                regressor.add(LSTM(units = innerLayer["number_units"], return_sequences = True))
+            else:
+                regressor.add(LSTM(units = innerLayer["number_units"]))
             if (innerLayer["use_leaky_relu"]):
                 regressor.add(LeakyReLU(alpha=innerLayer["relu_alpha"]))
+            cont = cont + 1
 
-        regressor.add(LSTM(units = 80))
-        regressor.add(LeakyReLU(alpha=0.5))
         regressor.add(Dense(units = result_train.shape[1], activation = 'sigmoid'))
         optimizer = Adam(learning_rate=self.learning_rate) #
         regressor.compile(optimizer = optimizer, loss = 'mean_squared_error',
                         metrics = ['mean_absolute_error', custom_accuracy])
-        es = EarlyStopping(monitor = 'loss', min_delta = 1e-10, patience = 10, verbose = 1)
-        rlr = ReduceLROnPlateau(monitor = 'loss', factor = 0.2, patience = 5, verbose = 1)
+        es = EarlyStopping(monitor = 'loss', min_delta = 1e-10, patience = 20, verbose = 1)
+        rlr = ReduceLROnPlateau(monitor = 'loss', factor = 0.2, patience = 10, verbose = 1)
         mcp = ModelCheckpoint(filepath = filepath, monitor = 'loss', save_best_only = True, verbose = 1, save_weights_only=True)
         history = regressor.fit(forecasters_train, result_train, epochs = self.epochs, batch_size = self.batch_size, callbacks = [es, rlr, mcp])
         final_metrics = history.history

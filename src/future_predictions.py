@@ -54,31 +54,46 @@ class FuturePredictions:
         if self.forecast.ndim == 1:
             self.forecast = self.forecast.reshape(-1, 1)
         
-        categories_total = self.forecast.shape[1]
-        new_rows = np.zeros((self.number_predictions, categories_total))
-        new_database = np.vstack((self.forecast, new_rows))
-        self.total_items = new_database.shape[0]
         converted_forecast = np.vectorize(lambda x: float(x))(self.forecast)
-        last_data  = converted_forecast[-6:]
-        data = last_data.reshape(1, self.number_days_predict_future , categories_total)
-        all_predictions = data
+        categories_total = converted_forecast.shape[1]
+        # print("categories_total", categories_total)
+        # print("number_predictions", self.number_predictions)
+        # new_rows = np.zeros((self.number_predictions, categories_total))
+        # print("new_rows", new_rows.shape)
+        # new_database = np.vstack((converted_forecast, new_rows))
+        # print("new_database", new_database.shape)
+        # print("new_database", new_database[10:])
+        # self.total_items = new_database.shape[0]
+        # print("self.total_items", self.total_items)
+        
+        # print("converted_forecast", converted_forecast.shape)
+        # last_data  = converted_forecast[-6:]
+        # print("last_data", last_data.shape)
+        data = converted_forecast.reshape(1, converted_forecast.shape[0] , categories_total)
+        all_predictions = []
         print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
         print(all_predictions)
 
         for i in range(self.number_predictions):
             future = self.__future_prediction(data)
             print(f"FUTURE: {future}")
+            all_predictions.append(future)
             data = np.delete(data, 0, axis=1)
             data = np.append(data, future[np.newaxis, :], axis=1)
-            resultado = np.vstack([all_predictions[0], future])
-            all_predictions = np.array([resultado])
+            # resultado = np.vstack([all_predictions[0], future])
+            # all_predictions = np.array([resultado])
             print("---------")
             print(data)
         
+        print("$$$$$$$$alll$$$$$$$$$$$$$$$$")
+        print(all_predictions)
+        numpy_array = np.array(all_predictions)
+        print(numpy_array.shape)
         print("$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
         normalizer = joblib.load(self.normalizer_path)
-        data_reshaped = all_predictions.reshape(-1, all_predictions.shape[-1])
+        data_reshaped = numpy_array.reshape(-1, numpy_array.shape[-1])
         future_prediction_original_format = normalizer.inverse_transform(data_reshaped)
+        values_string = np.vectorize(lambda x: str(x))(future_prediction_original_format)
         
         prediction_dates = self.__format_expected_days_with_data(future_prediction_original_format)
-        return future_prediction_original_format[:, -1], prediction_dates
+        return values_string[:, -1], prediction_dates
