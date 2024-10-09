@@ -123,7 +123,7 @@ class TemperatureMeasurements:
         if (self.kernel_regularizer == 'L1'):
             reg = L1(self.layer_weight_l1)
         elif (self.kernel_regularizer == 'L1L2'):
-            reg = L1L2(self.layer_weight_l1, self.layer_weight_l2)
+            reg = L1L2(l1=self.layer_weight_l1, l2=self.layer_weight_l2)
         regressor = Sequential()
         regressor.save_weights(filepath)
         regressor.add(LSTM(units = 100, return_sequences = True, input_shape = (forecasters_train.shape[1], forecasters_train.shape[2]), kernel_regularizer=reg))
@@ -142,7 +142,7 @@ class TemperatureMeasurements:
         optimizer = Adam(learning_rate=self.learning_rate) #
         regressor.compile(optimizer = optimizer, loss = 'mean_squared_error',
                         metrics = ['mean_absolute_error', custom_accuracy])
-        es = EarlyStopping(monitor = 'loss', min_delta = 1e-10, patience = 20, verbose = 1)
+        es = EarlyStopping(monitor = 'loss', min_delta = 1e-10, patience = 5, verbose = 1)
         rlr = ReduceLROnPlateau(monitor = 'loss', factor = 0.2, patience = 10, verbose = 1)
         mcp = ModelCheckpoint(filepath = filepath, monitor = 'loss', save_best_only = True, verbose = 1, save_weights_only=True)
         history = regressor.fit(forecasters_train, result_train, epochs = self.epochs, batch_size = self.batch_size, callbacks = [es, rlr, mcp])
@@ -253,6 +253,11 @@ class TemperatureMeasurements:
             os.remove(model_file_path)
         predictions, regressor, custom_accuracy, loss, mean_absolute_error, learning_rate = self.__prediction(forecasters_train, forecasters_test, result_train, file_path, model_file_path)
         # self.__show_results_prediction(result_test, forecasters_train, predictions, normalizer, base_array, data_tests, index_column_chosen_category)
+
+        predictions_path = os.path.join(self.baseDir, 'predictions.txt')
+        result_test_file_path = os.path.join(self.baseDir, 'result_test.txt')
+        np.savetxt(predictions_path, predictions)
+        np.savetxt(result_test_file_path, result_test)
 
         return {
             'model_file_path': model_file_path,
