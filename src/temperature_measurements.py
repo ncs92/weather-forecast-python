@@ -126,14 +126,14 @@ class TemperatureMeasurements:
             reg = L1L2(l1=self.layer_weight_l1, l2=self.layer_weight_l2)
         regressor = Sequential()
         regressor.save_weights(filepath)
-        regressor.add(LSTM(units = 100, return_sequences = True, input_shape = (forecasters_train.shape[1], forecasters_train.shape[2]), kernel_regularizer=reg))
-        regressor.add(LeakyReLU(alpha=0.5))
+        regressor.add(LSTM(units = 100, return_sequences = True, input_shape = (forecasters_train.shape[1], forecasters_train.shape[2]), kernel_regularizer=L2(0.001)))
+        # regressor.add(LeakyReLU(alpha=0.5))
         cont = 0
         for innerLayer in self.inner_layers:
             if cont < (len(self.inner_layers)-1):
-                regressor.add(LSTM(units = innerLayer["number_units"], return_sequences = True))
+                regressor.add(LSTM(units = innerLayer["number_units"], kernel_regularizer=reg, return_sequences = True))
             else:
-                regressor.add(LSTM(units = innerLayer["number_units"]))
+                regressor.add(LSTM(units = innerLayer["number_units"], kernel_regularizer=reg))
             if (innerLayer["use_leaky_relu"]):
                 regressor.add(LeakyReLU(alpha=innerLayer["relu_alpha"]))
             cont = cont + 1
@@ -142,7 +142,7 @@ class TemperatureMeasurements:
         optimizer = Adam(learning_rate=self.learning_rate) #
         regressor.compile(optimizer = optimizer, loss = 'mean_squared_error',
                         metrics = ['mean_absolute_error', custom_accuracy])
-        es = EarlyStopping(monitor = 'loss', min_delta = 1e-10, patience = 5, verbose = 1)
+        es = EarlyStopping(monitor = 'loss', min_delta = 1e-10, patience = 5, verbose = 1, restore_best_weights=True)
         rlr = ReduceLROnPlateau(monitor = 'loss', factor = 0.2, patience = 10, verbose = 1)
         mcp = ModelCheckpoint(filepath = filepath, monitor = 'loss', save_best_only = True, verbose = 1, save_weights_only=True)
         history = regressor.fit(forecasters_train, result_train, epochs = self.epochs, batch_size = self.batch_size, callbacks = [es, rlr, mcp])
@@ -167,13 +167,22 @@ class TemperatureMeasurements:
         prediction_original_format = normalizer.inverse_transform(base_prediction)
         result_test_original = normalizer.inverse_transform(result_test)
         predictions_original = normalizer.inverse_transform(predictions)
+        predictions = []
+        result_test = []
 
         for i in range(len(prediction_original_format)):
             item = result_test_original[i]
             tam = 10 if len(item) > 10 else len(item)
             for j in range(tam):
+                predictions.append(predictions_original[i][j])
+                result_test.append(result_test_original[i][j])
                 print(f"{data_tests[i]} - Esperado: {"{:.2f}".format(result_test_original[i][j])}, Previsão: {"{:.2f}".format(predictions_original[i][j])}")
             print("########################")
+            
+        predictions_path = os.path.join(self.baseDir, 'predictions.txt')
+        result_test_file_path = os.path.join(self.baseDir, 'result_test.txt')
+        np.savetxt(predictions_path, predictions)
+        np.savetxt(result_test_file_path, result_test)
 
     def __future_prediction(self, future_forecasters):
         current_path = os.getcwd() + '/pesos.keras'
@@ -199,6 +208,7 @@ class TemperatureMeasurements:
         correlation_matrix = data_without_date.corr()
         chosen_category_corr = correlation_matrix[chosen_category]
         correlated_columns = chosen_category_corr[chosen_category_corr > 0.4].index.tolist()
+        print("CORRELATED COLUMNS", correlated_columns)
         if chosen_category not in correlated_columns:
             correlated_columns.append(chosen_category)
         filtered_csv = csv[['date'] + correlated_columns]
@@ -240,7 +250,7 @@ class TemperatureMeasurements:
         np.savetxt(last_forecast_file_path, forecasters[len(forecasters)-1])
         np.savetxt(last_predict_value_file_path, values_to_predict[len(forecasters)-1])
 
-        forecasters_train, forecasters_test, result_train, result_test = train_test_split(forecasters, values_to_predict, test_size=0.3, shuffle=False)
+        forecasters_train, forecasters_test, result_train, result_test = train_test_split(forecasters, values_to_predict, test_size=0.1, shuffle=False)
         index_init_result_test = len(forecasters_train)
         data_tests = data_forecasters[index_init_result_test:]
         normalize_base_train.shape
@@ -252,13 +262,9 @@ class TemperatureMeasurements:
         if os.path.exists(model_file_path):
             os.remove(model_file_path)
         predictions, regressor, custom_accuracy, loss, mean_absolute_error, learning_rate = self.__prediction(forecasters_train, forecasters_test, result_train, file_path, model_file_path)
-        # self.__show_results_prediction(result_test, forecasters_train, predictions, normalizer, base_array, data_tests, index_column_chosen_category)
+        self.__show_results_prediction(result_test, forecasters_train, predictions, normalizer, base_array, data_tests, index_column_chosen_category)
 
-        predictions_path = os.path.join(self.baseDir, 'predictions.txt')
-        result_test_file_path = os.path.join(self.baseDir, 'result_test.txt')
-        np.savetxt(predictions_path, predictions)
-        np.savetxt(result_test_file_path, result_test)
-
+    
         return {
             'model_file_path': model_file_path,
             'path': file_path,
