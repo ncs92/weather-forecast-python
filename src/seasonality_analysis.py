@@ -10,21 +10,28 @@ class SeasonalityAnalysis:
         self.data = data
     
     def data_decomposition(self):
-        self.historical_decomposition = sm.tsa.seasonal_decompose(self.data['historical'], model='additive', period=12)
-        self.decomposition_forecast = sm.tsa.seasonal_decompose(self.data['forecast'], model='additive', period=12)
+        print("$$$$$$$")
+        print(self.data['historical'])
+        print("$$$$$$$")
+        print("######")
+        print(self.data['forecast'])
+        print("$$$$$$$")
+        period = len(self.data['historical'])
+        self.historical_decomposition = sm.tsa.seasonal_decompose(self.data['historical'], model='additive', period=7)
+        self.decomposition_forecast = sm.tsa.seasonal_decompose(self.data['forecast'], model='additive', period=7)
 
         # Plotando a decomposição
         self.historical_decomposition.plot()
         plt.title('Decomposição dos Dados Históricos')
         file_path = os.path.join(self.baseDir, 'historical_decomposition.png')
         plt.savefig(file_path)
-        plt.show()
+        # plt.show()
 
         self.decomposition_forecast.plot()
         plt.title('Decomposição dos Dados Previstos')
         file_path = os.path.join(self.baseDir, 'forecast_decomposition.png')
         plt.savefig(file_path)
-        plt.show()
+        # plt.show()
         
     def comparison_trends_seasonalities(self):
         # Plotando a tendência
@@ -35,7 +42,7 @@ class SeasonalityAnalysis:
         plt.title('Comparação das Tendências')
         file_path = os.path.join(self.baseDir, 'tendencies.png')
         plt.savefig(file_path)
-        plt.show()
+        # plt.show()
 
         # Plotando a sazonalidade
         plt.figure(figsize=(10, 6))
@@ -45,7 +52,7 @@ class SeasonalityAnalysis:
         plt.title('Comparação das Sazonalidades')
         file_path = os.path.join(self.baseDir, 'seasonality.png')
         plt.savefig(file_path)
-        plt.show()
+        # plt.show()
 
     def pearson_correlation(self):
         # Calculando correlação de Pearson entre as tendências
