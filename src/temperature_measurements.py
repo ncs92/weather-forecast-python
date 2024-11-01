@@ -20,7 +20,6 @@ import math
 import os
 import keras
 
-# Clear any existing custom objects
 keras.saving.get_custom_objects().clear()
 
 def custom_accuracy_item(y_real, y_pred):
@@ -50,7 +49,6 @@ class TemperatureMeasurements:
         self.layer_weight_l2 = request["kernel_regularizers"]["layer_weight_l2"]
         self.inner_layers = request["inner_layers"]
         self.learning_rate = float(request["learning_rate"])
-        # self.number_days_predict_future = number_days_predict_future
 
     def __read_file(self, file):
         csv = pd.read_csv(file, sep=',')
@@ -61,7 +59,6 @@ class TemperatureMeasurements:
             "filePath": self.filePath,
             "chosen_category": self.chosen_category,
             "number_days_to_predict_next": self.number_days_to_predict_next,
-            # "number_days_predict_future": self.number_days_predict_future
         }
 
     def get_config(self):
@@ -69,7 +66,6 @@ class TemperatureMeasurements:
             "filePath": self.filePath,
             "chosen_category": self.chosen_category,
             "number_days_to_predict_next": self.number_days_to_predict_next,
-            # "number_days_predict_future": self.number_days_predict_future
         }
 
     @classmethod
@@ -127,16 +123,15 @@ class TemperatureMeasurements:
         regressor = Sequential()
         regressor.save_weights(filepath)
         regressor.add(LSTM(units = 100, return_sequences = True, input_shape = (forecasters_train.shape[1], forecasters_train.shape[2]), kernel_regularizer=L2(0.001)))
-        # regressor.add(LeakyReLU(alpha=0.5))
-        cont = 0
+        count = 0
         for innerLayer in self.inner_layers:
-            if cont < (len(self.inner_layers)-1):
+            if count < (len(self.inner_layers)-1):
                 regressor.add(LSTM(units = innerLayer["number_units"], kernel_regularizer=reg, return_sequences = True))
             else:
                 regressor.add(LSTM(units = innerLayer["number_units"], kernel_regularizer=reg))
             if (innerLayer["use_leaky_relu"]):
                 regressor.add(LeakyReLU(alpha=innerLayer["relu_alpha"]))
-            cont = cont + 1
+            count = count + 1
 
         regressor.add(Dense(units = result_train.shape[1], activation = 'sigmoid'))
         optimizer = Adam(learning_rate=self.learning_rate) #
@@ -162,7 +157,7 @@ class TemperatureMeasurements:
 
         return predictions, regressor, custom_acc, loss, mean_absolute_error, learning_rate
 
-    def __show_results_prediction(self, result_test, forecasters_train, predictions, normalizer, base_array, data_tests, index_column_chosen_category):
+    def __show_results_prediction(self, result_test, forecasters_train, predictions, normalizer, base_train, data_tests, index_column_chosen_category):
         base_prediction = np.zeros((result_test.shape[0], result_test.shape[1]))
         prediction_original_format = normalizer.inverse_transform(base_prediction)
         result_test_original = normalizer.inverse_transform(result_test)
@@ -220,9 +215,7 @@ class TemperatureMeasurements:
 
     def getFuturePredictions(self):
         csv = self.__read_file(self.filePath)
-        csv.replace(-9999.0, np.nan, inplace=True)
-        csv.replace(-9999, np.nan, inplace=True)
-        csv.replace([-9999.00, -9999], np.nan, inplace=True)
+        csv.replace([-9999, -9999], np.nan, inplace=True)
 
         filtered_csv = self.getOnlyCorrelationColumns(csv, self.chosen_category)
 
@@ -231,8 +224,7 @@ class TemperatureMeasurements:
         index_column_chosen_category = categories.index(self.chosen_category)
         base_without_date = database[:, 1:database.shape[1]]
 
-        base_array = self.__normalize_invalid_rows(base_without_date, index_column_chosen_category)
-        base_train = base_array
+        base_train = self.__normalize_invalid_rows(base_without_date, index_column_chosen_category)
         normalize_base_train, normalizer = self.__normalize_base(base_train)
         forecasters = []
         data_forecasters = []
@@ -262,7 +254,7 @@ class TemperatureMeasurements:
         if os.path.exists(model_file_path):
             os.remove(model_file_path)
         predictions, regressor, custom_accuracy, loss, mean_absolute_error, learning_rate = self.__prediction(forecasters_train, forecasters_test, result_train, file_path, model_file_path)
-        self.__show_results_prediction(result_test, forecasters_train, predictions, normalizer, base_array, data_tests, index_column_chosen_category)
+        self.__show_results_prediction(result_test, forecasters_train, predictions, normalizer, base_train, data_tests, index_column_chosen_category)
 
     
         return {
